@@ -1,6 +1,7 @@
 import os
 from typing import TYPE_CHECKING, List
 from fastapi.responses import FileResponse
+import logging
 import fastapi as _fastapi
 import sqlalchemy.orm as _orm
 import fastapi.security as _security
@@ -16,6 +17,12 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 app = _fastapi.FastAPI()
+
+@app.on_event("startup")
+async def startup():
+    logging.info("Initializing database...")
+    _database.init_db()
+    logging.info("Database initialized.")
 
 # Base directory for users uploads
 UPLOAD_DIR = "users_media"

@@ -10,19 +10,19 @@ import pydantic as _pydantic
 import app.database.database as _database
 import app.database.models as _models      
 import app.database.schemas as _schemas
+import os
 
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-_JWT_SECRET = "thisisnotverysfe"
+_JWT_SECRET = os.getenv("JWT_SECRET", "thisisnotverysafe")
 
 def _add_tables():
     return _database.Base.metadata.create_all(bind=_database.engine)
 
 def get_db():
     db = _database.SessionLocal()
-
     try: 
         yield db
     finally:
@@ -51,23 +51,22 @@ async def get_all_media(db: "Session") -> list[_schemas.Media]:
     return list (map(_schemas.Media.from_orm, media_instance))
 
 async def get_media(id: int, db: "Session"):
-   media_instance = db.query(_models.Media).filter(_models.Media.id == id).first()
-   return media_instance
+    return db.query(_models.Media).filter(_models.Media.id == id).first()
 
 async def get_album(id: int, db: "Session"):
-    album_instance = db.query(_models.Album).filter(_models.Album.id == id).first()
-    return album_instance
+    return db.query(_models.Album).filter(_models.Album.id == id).first()
 
 async def get_artist(id: int, db: "Session"):
-    artist_instance = db.query(_models.Artist).filter(_models.Artist.id == id).first()
-    return artist_instance
+    return db.query(_models.Artist).filter(_models.Artist.id == id).first()
 
 async def delete_media(media: _models.Media, db: "Session"):
     db.delete(media)
     db.commit()
 
 async def update_media(
-    media_data: _schemas.CreateMedia, media: _models.Media, db: "Session"
+    media_data: _schemas.CreateMedia, 
+    media: _models.Media, 
+    db: "Session"
 ) -> _schemas.Media:
     media.title = media_data.title
 
@@ -76,10 +75,16 @@ async def update_media(
 
     return _schemas.Media.from_orm(media)
 
-async def get_user_by_email(email: str, db: "Session"):
+async def get_user_by_email(
+    email: str,
+    db: "Session"
+):
     return db.query(_models.User).filter(_models.User.email == email).first()
 
-async def create_user(user: _schemas.UserCreate, db: "Session"):
+async def create_user(
+    user: _schemas.UserCreate, 
+    db: "Session"
+):
 # check that email is valid
     try: 
         # Validate email
@@ -91,7 +96,6 @@ async def create_user(user: _schemas.UserCreate, db: "Session"):
         )
     hashed_password = _hash.bcrypt.hash(user.password)
     user_obj = _models.User(email=email, hashed_password=hashed_password)
-
     db.add(user_obj)
     db.commit()
     db.refresh(user_obj)
@@ -99,23 +103,15 @@ async def create_user(user: _schemas.UserCreate, db: "Session"):
     
 async def create_token(user: _models.User):
     user_schema_obj = _schemas.User.from_orm(user)
-
     user_dict = user_schema_obj.dict()
     del user_dict["date_created"]
-
-    token = _jwt.encode(user_dict, _JWT_SECRET)
-
+    token = _jwt.encode(user_dict, _JWT_SECRET, algorithm="HS256")
     return dict(access_token=token, token_type="bearer")
 
 async def authenticate_user(email: str, password: str, db: "Session"):
     user = await get_user_by_email(email=email, db=db)
-
-    if not user:
+    if not user or not user.verify_password(password=password):
         return False
-
-    if not user.verify_password(password=password):
-        return False
-    
     return user
 
 async def get_current_user(
@@ -129,7 +125,6 @@ async def get_current_user(
         raise _fastapi.HTTPException(
             status_code=401, detail="Invalid email or password"
         )
-    
     return _schemas.User.from_orm(user)
 
 async def create_post(user: _schemas.User, db: "Session", post: _schemas.PostCreate):
@@ -141,23 +136,19 @@ async def create_post(user: _schemas.User, db: "Session", post: _schemas.PostCre
 
 async def _get_user_posts(user: _schemas.User, db: "Session"):
     posts = db.query(_models.Post).filter_by(owner_id=user.id)
-
     return list(map(_schemas.Post.from_orm, posts))
 
-async def get_or_create_artist(artist_name: str, db: "Session") -> _models.Artist:
-    artist = db.query(_models.Artist).filter(_models.Artist.name == artist_name).first()
-    if artist is None:
-        artist = _models.Artist(name=artist_name)
-        db.add(artist)
+async def get_or_create_entity(entity_class, name: str, db: "Session"):
+    entity = db.query(entity_class).filter(entity_class.name == name).first()
+    if entity is None:
+        entity = entity_class(name=name)
+        db.add(entity)
         db.commit()
-        db.refresh(artist)
-    return artist
+        db.refresh(entity)
+    return entity
+
+async def get_or_create_artist(artist_name: str, db: "Session") -> _models.Artist:
+    return await get_or_create_entity(_models.Artist, artist_name, db)
 
 async def get_or_create_album(album_name: str, db: "Session") -> _models.Album:
-    album = db.query(_models.Album).filter(_models.Album.name == album_name).first()
-    if album is None:
-        album = _models.Album(name=album_name)
-        db.add(album)
-        db.commit()
-        db.refresh(album)
-    return album
+    return await get_or_create_entity(_models.Album, album_name, db)

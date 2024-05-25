@@ -51,9 +51,6 @@ venv/
 
 # Docker
 *.log
-docker-compose.override.yml
-Dockerfile
-docker-compose.yml
 
 # FastAPI specific
 *.db
