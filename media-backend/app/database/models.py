@@ -13,6 +13,8 @@ class Media (_database.Base):
     time = _sql.Column(_sql.DateTime)
     album_id = _sql.Column(_sql.Integer, _sql.ForeignKey('album_table.id'), index=True)
     users_id = _sql.Column(_sql.Integer, _sql.ForeignKey('users_table.id'), index=True)
+    length = _sql.Column(_sql.Integer)
+    genre = _sql.Column(_sql.String, nullable=True)
     
     artist = _orm.relationship("Artist", back_populates="media")
     album = _orm.relationship("Album", back_populates="media")

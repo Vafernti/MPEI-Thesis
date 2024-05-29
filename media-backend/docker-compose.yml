@@ -12,7 +12,9 @@ services:
       - JWT_SECRET=your_jwt_secret
     depends_on:
       - db
-
+    volumes:
+    #  - users_files:/code/users_media
+      - /Users/ivan/Documents/WebServer/media-backend:/code
   db:
     image: postgres:13
     container_name: fastapi_db
@@ -27,3 +29,4 @@ services:
 
 volumes:
   postgres_data:
+ # users_files:

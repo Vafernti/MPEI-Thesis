@@ -12,9 +12,15 @@ class _BaseMedia(_BaseModel):
     time: _dt.datetime
     album_id: int
     users_id: int
+    length: int
+    genre: str = None
 
 class Media (_BaseMedia):
     id: int
+    time: str
+    length: str
+    artist_name: str
+    album_name: str
 
 class CreateMedia(_BaseMedia):
     pass

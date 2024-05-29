@@ -18,12 +18,6 @@ if TYPE_CHECKING:
 
 app = _fastapi.FastAPI()
 
-@app.on_event("startup")
-async def startup():
-    logging.info("Initializing database...")
-    _database.init_db()
-    logging.info("Database initialized.")
-
 # Base directory for users uploads
 UPLOAD_DIR = "users_media"
 
@@ -36,6 +30,20 @@ def get_user_upload_dir(user_id: int) -> str:
     os.makedirs(user_dir, exist_ok=True)
     return user_dir
 
+def reformat_datetime(dt: _dt.datetime) -> str:
+    """Reformat a datetime object to 'YYYY-MM-DD, HH:MM:SS' format."""
+    formatted_date = dt.strftime("%Y-%m-%d, %H:%M:%S")
+    return formatted_date
+
+def format_length(seconds: int) -> str:
+    """Convert seconds into MM:SS format."""
+    minutes, seconds = divmod(seconds, 60)
+    return f"{minutes:02}:{seconds:02}"
+
+@app.get("/api")
+async def root():
+    return {"message": "MyMedia"}
+
 @app.post("/api/upload/")
 async def upload_file(
     file: _fastapi.UploadFile = _fastapi.File(...),
@@ -43,6 +51,7 @@ async def upload_file(
     db: _orm.Session = _fastapi.Depends(_services.get_db)
 ):
     user_dir = get_user_upload_dir(user.id)
+    print(f"User directory: {user_dir}")  # Debugging print statement
     file_path = os.path.join(user_dir, file.filename)
 
     # Check if the file already exists to prevent overwriting
@@ -52,15 +61,19 @@ async def upload_file(
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-        # Extract metadata using mutagen for m4a files
+    # Extract metadata using mutagen for m4a files
     try:
         audio = MP4(file_path)
         filename = file.filename
         artist_name = audio.tags.get('\xa9ART', ["Unknown Artist"])[0]  # Get artist name
         album_name = audio.tags.get('\xa9alb', ["Unknown Album"])[0]    # Get album name
+        length = int(audio.info.length)  # Get track length
+        genre = audio.tags.get('\xa9gen', ["Unknown Genre"])[0]  # Get genre
     except Exception as e:
         artist_name = "Unknown Artist"
         album_name = "Unknown Album"
+        length = 0
+        genre = "Unknown Genre"
 
     # Get or create artist and album
     artist = await _services.get_or_create_artist(artist_name=artist_name, db=db)
@@ -72,11 +85,14 @@ async def upload_file(
         artist_id=artist.id,
         time=_dt.datetime.utcnow(),
         album_id=album.id,
-        users_id=user.id
+        users_id=user.id,
+        length=length,
+        genre=genre
     )
     await _services.create_media(media=media_data, db=db)
 
     return {"filename": file.filename, "path": file_path}
+
 
 @app.get("/api/download/{filename}", response_class=FileResponse)
 async def download_file(
@@ -212,24 +228,38 @@ async def get_user_posts(
     return await _services._get_user_posts(user=user, db=db)
 
 @app.get("/api/media/", response_model=list[_schemas.Media])
-async def list_media (
-    db: "_orm.Session"= _fastapi.Depends(_services.get_db),
+async def list_media(
+    db: _orm.Session = _fastapi.Depends(_services.get_db),
     user: _schemas.User = _fastapi.Depends(_services.get_current_user)
 ):
-    media_files = db.query(_models.Media).filter(_models.Media.users_id == user.id).all()
+    media_files = db.query(_models.Media).options(
+        _orm.joinedload(_models.Media.artist),
+        _orm.joinedload(_models.Media.album)
+    ).filter(_models.Media.users_id == user.id).all()
+
     valid_media_files = []
-    
+
     for media in media_files:
         user_dir = get_user_upload_dir(user.id)
         file_path = os.path.join(user_dir, media.title)
         if os.path.exists(file_path):
-            valid_media_files.append(media)
+            valid_media_files.append({
+                "id": media.id,
+                "title": media.title,
+                "artist_id": media.artist.id,
+                "artist_name": media.artist.name,
+                "album_id": media.album.id,
+                "album_name": media.album.name,
+                "time": reformat_datetime(media.time),
+                "users_id": media.users_id,
+                "length": format_length(media.length),
+                "genre": media.genre
+            })
         else:
-            # Optionally, remove the orphaned entry from the database
             db.delete(media)
             db.commit()
 
-    return list(map(_schemas.Media.from_orm, valid_media_files))
+    return valid_media_files
 
 @app.get("/api/media/{id}/", response_model=_schemas.Media)
 async def get_media(
