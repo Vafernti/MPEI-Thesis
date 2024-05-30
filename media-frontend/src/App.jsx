@@ -44,7 +44,7 @@ const App = () => {
       <Header title={message} />
       <div className='columns'>
         <div className='column'></div>
-        <div className='column m-5 is-two-thirds'>
+        <div className='column m-5 column is-two-thirds'>
           {loading ? (
             <p>Loading...</p>
           ) : error ? (

@@ -2,6 +2,8 @@ import React, { useContext, useEffect, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
 import { UserContext } from "../context/UserContext";
 import UploadModal from "./UploadModal";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faDownload, faTrash } from '@fortawesome/free-solid-svg-icons';
 
 const Table = () => {
     const [token] = useContext(UserContext);
@@ -10,6 +12,7 @@ const Table = () => {
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'title', direction: 'ascending' });
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
 
     const getMedia = async () => {
         setLoading(true);
@@ -23,6 +26,32 @@ const Table = () => {
 
         try {
             const response = await fetch("/api/media/", requestOptions);
+
+            if (!response.ok) {
+                throw new Error("Something went wrong. Couldn't load the media.");
+            }
+
+            const data = await response.json();
+            setMedia(data);
+        } catch (error) {
+            setErrorMessage(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const searchMedia = async (query) => {
+        setLoading(true);
+        const requestOptions = {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+        };
+
+        try {
+            const response = await fetch(`/api/media/search?query=${query}`, requestOptions);
 
             if (!response.ok) {
                 throw new Error("Something went wrong. Couldn't load the media.");
@@ -57,6 +86,13 @@ const Table = () => {
             direction = 'descending';
         }
         setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key) => {
+        if (sortConfig.key === key) {
+            return sortConfig.direction === 'ascending' ? '▲' : '▼';
+        }
+        return '';
     };
 
     const downloadMedia = async (title) => {
@@ -105,57 +141,97 @@ const Table = () => {
         }
     };
 
+    const convertToLocalTime = (utcTime) => {
+        const date = new Date(utcTime);
+        return date.toLocaleString(); // This will convert to user's local time
+    };
+
+    const handleSearch = (e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        if (query) {
+            searchMedia(query);
+        } else {
+            getMedia();
+        }
+    };
+
     return (
-        <>
+        <div style={{ width: '100%', overflowX: 'auto' }}>
             <button
                 className="button is-fullwidth mb-5 is-primary"
                 onClick={() => setShowUploadModal(true)}
             >
                 Add Media
             </button>
+            <input
+                type="text"
+                className="input mb-3"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={handleSearch}
+            />
             <ErrorMessage message={errorMessage} />
             {loading ? (
                 <p>Loading...</p>
             ) : (
-                <table className="table is-fullwidth">
-                    <thead>
-                        <tr>
-                            <th onClick={() => requestSort('title')}>Title</th>
-                            <th onClick={() => requestSort('length')}>Length</th>
-                            <th onClick={() => requestSort('artist_id')}>Artist</th>
-                            <th onClick={() => requestSort('album_id')}>Album</th>
-                            <th onClick={() => requestSort('genre')}>Genre</th>
-                            <th onClick={() => requestSort('time')}>Date Added</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sortedMedia.map((item) => (
-                            <tr key={item.id}>
-                                <td>{item.title}</td>
-                                <td>{item.length}</td>
-                                <td>{item.artist_name}</td>
-                                <td>{item.album_name}</td>
-                                <td>{item.genre}</td>
-                                <td>{item.time}</td>
-                                <td>
-                                    <button
-                                        className="button mr-2 is-info is-light"
-                                        onClick={() => downloadMedia(item.title)}
-                                    >
-                                        Download
-                                    </button>
-                                    <button
-                                        className="button mr-2 is-danger is-light"
-                                        onClick={() => deleteMedia(item.title)}
-                                    >
-                                        Delete
-                                    </button>
-                                </td>
+                <div className="table-container">
+                    <table className="table is-fullwidth is-striped">
+                        <thead>
+                            <tr>
+                                <th onClick={() => requestSort('title')} style={{ cursor: 'pointer' }}>
+                                    Title {getSortIndicator('title')}
+                                </th>
+                                <th onClick={() => requestSort('length')} style={{ cursor: 'pointer' }}>
+                                    Length {getSortIndicator('length')}
+                                </th>
+                                <th onClick={() => requestSort('artist_name')} style={{ cursor: 'pointer' }}>
+                                    Artist {getSortIndicator('artist_name')}
+                                </th>
+                                <th onClick={() => requestSort('album_name')} style={{ cursor: 'pointer' }}>
+                                    Album {getSortIndicator('album_name')}
+                                </th>
+                                <th onClick={() => requestSort('genre')} style={{ cursor: 'pointer' }}>
+                                    Genre {getSortIndicator('genre')}
+                                </th>
+                                <th onClick={() => requestSort('time')} style={{ cursor: 'pointer' }}>
+                                    Date Added {getSortIndicator('time')}
+                                </th>
+                                <th>Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {sortedMedia.map((item) => (
+                                <tr key={item.id}>
+                                    <td>{item.title}</td>
+                                    <td>{item.length}</td>
+                                    <td>{item.artist_name}</td>
+                                    <td>{item.album_name}</td>
+                                    <td>{item.genre}</td>
+                                    <td>{convertToLocalTime(item.time)}</td>
+                                    <td style={{ display: 'flex', justifyContent: 'space-around' }}>
+                                        <button
+                                            className="button is-light"
+                                            onClick={() => downloadMedia(item.title)}
+                                            title="Download"
+                                            style={{ backgroundColor: 'blue', color: 'white' }}
+                                        >
+                                            <FontAwesomeIcon icon={faDownload} />
+                                        </button>
+                                        <button
+                                            className="button is-light"
+                                            onClick={() => deleteMedia(item.title)}
+                                            title="Delete"
+                                            style={{ backgroundColor: 'red', color: 'white' }}
+                                        >
+                                            <FontAwesomeIcon icon={faTrash} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
             {showUploadModal && (
                 <UploadModal
@@ -163,7 +239,7 @@ const Table = () => {
                     onUpload={getMedia}
                 />
             )}
-        </>
+        </div>
     );
 };
 
