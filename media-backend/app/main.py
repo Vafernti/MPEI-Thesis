@@ -4,6 +4,8 @@ from fastapi.responses import FileResponse
 import logging
 import fastapi as _fastapi
 import sqlalchemy.orm as _orm
+from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
 import fastapi.security as _security
 import datetime as _dt
 import threading
@@ -30,10 +32,9 @@ def get_user_upload_dir(user_id: int) -> str:
     os.makedirs(user_dir, exist_ok=True)
     return user_dir
 
-def reformat_datetime(dt: _dt.datetime) -> str:
-    """Reformat a datetime object to 'YYYY-MM-DD, HH:MM:SS' format."""
-    formatted_date = dt.strftime("%Y-%m-%d, %H:%M:%S")
-    return formatted_date
+def reformat_datetime(dt: _dt) -> str:
+    """Reformat a datetime object to 'YYYY-MM-DDTHH:MM:SSZ' format."""
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def format_length(seconds: int) -> str:
     """Convert seconds into MM:SS format."""
@@ -308,17 +309,44 @@ async def delete_media(
     return "Media was deleted successfully"
 
 
-@app.put("/api/media/{id}/", response_model=_schemas.Media)
-async def update_media(
-    id: int, 
-    media_data:_schemas.CreateMedia, 
-    db: "_orm.Session" = _fastapi.Depends(_services.get_db),
+@app.get("/api/media/search", response_model=list[_schemas.Media])
+async def search_media(
+    query: str,
+    db: _orm.Session = _fastapi.Depends(_services.get_db),
     user: _schemas.User = _fastapi.Depends(_services.get_current_user)
 ):
-    media = await _services.get_media(id=id, db=db)
-    if media is None:
-        raise _fastapi.HTTPException(status_code=404, detail="Mediafile does not exist")
-    
-    return await _services.update_media(
-        media_data=media_data, media=media, db=db
-    )
+    media_files = db.query(_models.Media).join(_models.Artist).join(_models.Album).options(
+        joinedload(_models.Media.artist),
+        joinedload(_models.Media.album)
+    ).filter(
+        _models.Media.users_id == user.id,
+        or_(
+            _models.Media.title.ilike(f"%{query}%"),
+            _models.Artist.name.ilike(f"%{query}%"),
+            _models.Album.name.ilike(f"%{query}%")
+        )
+    ).all()
+
+    valid_media_files = []
+
+    for media in media_files:
+        user_dir = get_user_upload_dir(user.id)
+        file_path = os.path.join(user_dir, media.title)
+        if os.path.exists(file_path):
+            valid_media_files.append({
+                "id": media.id,
+                "title": media.title,
+                "artist_id": media.artist.id,
+                "artist_name": media.artist.name,
+                "album_id": media.album.id,
+                "album_name": media.album.name,
+                "time": reformat_datetime(media.time),  # Ensure correct format
+                "users_id": media.users_id,
+                "length": format_length(media.length),
+                "genre": media.genre
+            })
+        else:
+            db.delete(media)
+            db.commit()
+
+    return valid_media_files
