@@ -29,6 +29,10 @@ app = _fastapi.FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/users_media", StaticFiles(directory="users_media"), name="users_media")
 
+@app.on_event("startup")
+def on_startup():
+   _database.init_db()
+
 # Base directory for users uploads
 UPLOAD_DIR = "users_media"
 
