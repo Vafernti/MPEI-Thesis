@@ -15,6 +15,7 @@ services:
     volumes:
     #  - users_files:/code/users_media
       - /Users/ivan/Documents/WebServer/media-backend:/code
+      - /Users/ivan/Documents/WebServer/media-backend/static:/code/static
   db:
     image: postgres:13
     container_name: fastapi_db

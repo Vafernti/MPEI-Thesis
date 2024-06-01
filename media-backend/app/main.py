@@ -1,7 +1,7 @@
 import os
+import re
 from typing import TYPE_CHECKING, List
-from fastapi.responses import FileResponse
-import logging
+from fastapi.responses import FileResponse, StreamingResponse
 import fastapi as _fastapi
 import sqlalchemy.orm as _orm
 from sqlalchemy.orm import joinedload
@@ -10,15 +10,24 @@ import fastapi.security as _security
 import datetime as _dt
 import threading
 import time
+import mutagen
 from mutagen.mp4 import MP4
+from mutagen.mp3 import MP3
+from mutagen.flac import FLAC
+from mutagen.wavpack import WavPack
+from mutagen.aac import AAC
 from app.database import schemas as _schemas
 from app.database import services as _services
 from app.database import models as _models, database as _database
+from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 app = _fastapi.FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/users_media", StaticFiles(directory="users_media"), name="users_media")
 
 # Base directory for users uploads
 UPLOAD_DIR = "users_media"
@@ -52,7 +61,6 @@ async def upload_file(
     db: _orm.Session = _fastapi.Depends(_services.get_db)
 ):
     user_dir = get_user_upload_dir(user.id)
-    print(f"User directory: {user_dir}")  # Debugging print statement
     file_path = os.path.join(user_dir, file.filename)
 
     # Check if the file already exists to prevent overwriting
@@ -62,19 +70,76 @@ async def upload_file(
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    # Extract metadata using mutagen for m4a files
+    print(f"File saved to {file_path}")
+
+    # Extract metadata using mutagen for supported audio files
+    supported_extensions = [".m4a", ".mp3", ".wav", ".flac", ".aac"]
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    
+    if file_extension not in supported_extensions:
+        raise _fastapi.HTTPException(status_code=400, detail="Unsupported file type")
+
     try:
-        audio = MP4(file_path)
+        audio = None
+        cover_image = None
+        if file_extension == ".m4a":
+            audio = MP4(file_path)
+            if 'covr' in audio:
+                cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
+                with open(cover_image, "wb") as img_file:
+                    img_file.write(audio['covr'][0])
+                print(f"Extracted cover image for .m4a: {cover_image}")
+        elif file_extension == ".mp3":
+            audio = MP3(file_path)
+            for tag in audio.tags.keys():
+                if tag.startswith('APIC:'):
+                    cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
+                    with open(cover_image, "wb") as img_file:
+                        img_file.write(audio.tags[tag].data)
+                    print(f"Extracted cover image for .mp3: {cover_image}")
+                    break
+            artist_name = audio.get('TPE1', ["Unknown Artist"])[0]  # Artist
+            album_name = audio.get('TALB', ["Unknown Album"])[0]   # Album
+            genre = audio.get('TCON', ["Unknown Genre"])[0]        # Genre
+        elif file_extension == ".wav":
+            audio = WavPack(file_path)
+            # WAV files typically don't contain embedded cover art
+        elif file_extension == ".flac":
+            audio = FLAC(file_path)
+            if audio.pictures:
+                cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
+                with open(cover_image, "wb") as img_file:
+                    img_file.write(audio.pictures[0].data)
+                print(f"Extracted cover image for .flac: {cover_image}")
+        elif file_extension == ".aac":
+            audio = AAC(file_path)
+            # Handle AAC cover art if available
+
         filename = file.filename
-        artist_name = audio.tags.get('\xa9ART', ["Unknown Artist"])[0]  # Get artist name
-        album_name = audio.tags.get('\xa9alb', ["Unknown Album"])[0]    # Get album name
-        length = int(audio.info.length)  # Get track length
-        genre = audio.tags.get('\xa9gen', ["Unknown Genre"])[0]  # Get genre
+        if file_extension != ".mp3":  # already handled above
+            artist_name = audio.tags.get('\xa9ART', ["Unknown Artist"])[0] if '\xa9ART' in audio.tags else "Unknown Artist"
+            album_name = audio.tags.get('\xa9alb', ["Unknown Album"])[0] if '\xa9alb' in audio.tags else "Unknown Album"
+            genre = audio.tags.get('\xa9gen', ["Unknown Genre"])[0] if '\xa9gen' in audio.tags else "Unknown Genre"
+        length = int(audio.info.length) if hasattr(audio.info, 'length') else 0
+
+        # Print statements to debug metadata extraction
+        print(f"Artist Name: {artist_name}")
+        print(f"Album Name: {album_name}")
+        print(f"Length: {length}")
+        print(f"Genre: {genre}")
+        
     except Exception as e:
+        print(f"Error extracting metadata: {e}")
         artist_name = "Unknown Artist"
         album_name = "Unknown Album"
         length = 0
         genre = "Unknown Genre"
+        cover_image = None
+
+    # Set default cover image if no cover is found
+    if not cover_image:
+        cover_image = "static/default_cover.png"  # Path to the default cover image
+        print("No cover image found, using default cover image")
 
     # Get or create artist and album
     artist = await _services.get_or_create_artist(artist_name=artist_name, db=db)
@@ -88,12 +153,13 @@ async def upload_file(
         album_id=album.id,
         users_id=user.id,
         length=length,
-        genre=genre
+        genre=genre,
+        cover_image=cover_image
     )
     await _services.create_media(media=media_data, db=db)
+    print(f"Saved media data: {media_data}")
 
     return {"filename": file.filename, "path": file_path}
-
 
 @app.get("/api/download/{filename}", response_class=FileResponse)
 async def download_file(
@@ -120,6 +186,7 @@ async def delete_file(
     
     if os.path.exists(file_path):
         os.remove(file_path)
+        print(f"Deleted media file: {file_path}")
 
         # Remove the corresponding database entry
         media = db.query(_models.Media).filter(
@@ -127,9 +194,15 @@ async def delete_file(
             _models.Media.title == filename
         ).first()
         if media:
+            # Delete the cover image file if it exists
+            cover_image_path = media.cover_image
+            if cover_image_path and os.path.exists(cover_image_path):
+                os.remove(cover_image_path)
+                print(f"Deleted cover image file: {cover_image_path}")
+
             db.delete(media)
             db.commit()
-        return {"detail": "File successfully deleted"}
+        return {"detail": "File and cover image successfully deleted"}
     else:
         raise _fastapi.HTTPException(status_code=404, detail="File not found")
 
@@ -254,7 +327,9 @@ async def list_media(
                 "time": reformat_datetime(media.time),
                 "users_id": media.users_id,
                 "length": format_length(media.length),
-                "genre": media.genre
+                "genre": media.genre,
+                "cover_image": media.cover_image or "static/default_cover.png",  # Ensure the cover_image is included
+                "path": f"/users_media/id_{media.users_id}_media/{media.title}"  # Ensure the path is correct
             })
         else:
             db.delete(media)
@@ -343,10 +418,66 @@ async def search_media(
                 "time": reformat_datetime(media.time),  # Ensure correct format
                 "users_id": media.users_id,
                 "length": format_length(media.length),
-                "genre": media.genre
+                "genre": media.genre,
+                "cover_image": media.cover_image or "static/default_cover.png",  # Ensure the cover_image is included
+                "path": f"/users_media/id_{media.users_id}_media/{media.title}"  # Ensure the path is correct
             })
         else:
             db.delete(media)
             db.commit()
 
     return valid_media_files
+
+@app.get("/api/stream/{filename}")
+async def stream_file(
+    filename: str,
+    token: str,
+    request: _fastapi.Request,
+    db: _orm.Session = _fastapi.Depends(_services.get_db)
+):
+    try:
+        user = await _services.get_current_user(token=token, db=db)
+        user_dir = get_user_upload_dir(user.id)
+        file_path = os.path.join(user_dir, filename)
+
+        if not os.path.exists(file_path):
+            raise _fastapi.HTTPException(status_code=404, detail="File not found")
+
+        file_size = os.path.getsize(file_path)
+        range_header = request.headers.get('Range', None)
+        start = 0
+        end = file_size - 1
+
+        if range_header:
+            range_match = re.match(r'bytes=(\d+)-(\d+)?', range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                if range_match.group(2):
+                    end = int(range_match.group(2))
+                else:
+                    end = file_size - 1
+
+        chunk_size = end - start + 1
+
+        def iterfile():
+            nonlocal chunk_size  # Ensure chunk_size is accessible in this scope
+            with open(file_path, mode="rb") as file:
+                file.seek(start)
+                while chunk_size > 0:
+                    chunk = file.read(min(4096, chunk_size))
+                    if not chunk:
+                        break
+                    yield chunk
+                    chunk_size -= len(chunk)
+
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": "audio/mpeg",
+        }
+
+        return StreamingResponse(iterfile(), status_code=206, headers=headers)
+
+    except Exception as e:
+        raise _fastapi.HTTPException(status_code=500, detail=str(e))

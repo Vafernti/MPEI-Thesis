@@ -14,6 +14,7 @@ class _BaseMedia(_BaseModel):
     users_id: int
     length: int
     genre: str = None
+    cover_image: str
 
 class Media (_BaseMedia):
     id: int

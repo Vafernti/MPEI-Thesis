@@ -15,7 +15,8 @@ class Media (_database.Base):
     users_id = _sql.Column(_sql.Integer, _sql.ForeignKey('users_table.id'), index=True)
     length = _sql.Column(_sql.Integer)
     genre = _sql.Column(_sql.String, nullable=True)
-    
+    cover_image = _sql.Column(_sql.String, nullable=True)  # New field for cover image
+
     artist = _orm.relationship("Artist", back_populates="media")
     album = _orm.relationship("Album", back_populates="media")
     user = _orm.relationship("User", back_populates="media")
