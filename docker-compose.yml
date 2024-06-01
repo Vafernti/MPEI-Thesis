@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build: media-backend/
+    container_name: backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://myuser:1234@db:5432/fastapi_database
+      - JWT_SECRET=your_jwt_secret
+    depends_on:
+      - db
+    volumes:
+    #  - users_files:/code/users_media
+      - /Users/ivan/Documents/WebServer/media-backend:/code
+      - /Users/ivan/Documents/WebServer/media-backend/static:/code/static
+  db:
+    image: postgres:13
+    container_name: fastapi_db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: fastapi_database
+    ports:
+      - "5432:5432"
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+
+  frontend:
+    build:
+      context: media-frontend/
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

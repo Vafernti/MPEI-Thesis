@@ -20,11 +20,21 @@ from app.database import schemas as _schemas
 from app.database import services as _services
 from app.database import models as _models, database as _database
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 app = _fastapi.FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/users_media", StaticFiles(directory="users_media"), name="users_media")
