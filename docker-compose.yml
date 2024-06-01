@@ -13,7 +13,6 @@ services:
     depends_on:
       - db
     volumes:
-    #  - users_files:/code/users_media
       - /Users/ivan/Documents/WebServer/media-backend:/code
       - /Users/ivan/Documents/WebServer/media-backend/static:/code/static
   db:
@@ -36,6 +35,8 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    volumes:
+     - /Users/ivan/Documents/WebServer/media-frontend:/app
 
 volumes:
   postgres_data:
