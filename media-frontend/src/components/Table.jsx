@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useState } from "react";
 import ErrorMessage from "./ErrorMessage";
 import { UserContext } from "../context/UserContext";
 import UploadModal from "./UploadModal";
+import TrackInfoModal from "./TrackInfoModal";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faTrash } from '@fortawesome/free-solid-svg-icons';
 
@@ -12,6 +13,8 @@ const Table = () => {
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'title', direction: 'ascending' });
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [showTrackInfoModal, setShowTrackInfoModal] = useState(false);
+    const [selectedTrack, setSelectedTrack] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
 
     const getMedia = async () => {
@@ -156,6 +159,11 @@ const Table = () => {
         }
     };
 
+    const handleRowClick = (track) => {
+        setSelectedTrack(track);
+        setShowTrackInfoModal(true);
+    };
+
     return (
         <div style={{ width: '100%', overflowX: 'auto' }}>
             <button
@@ -202,7 +210,7 @@ const Table = () => {
                         </thead>
                         <tbody>
                             {sortedMedia.map((item) => (
-                                <tr key={item.id}>
+                                <tr key={item.id} onClick={() => handleRowClick(item)} style={{ cursor: 'pointer' }}>
                                     <td>{item.title}</td>
                                     <td>{item.length}</td>
                                     <td>{item.artist_name}</td>
@@ -212,7 +220,7 @@ const Table = () => {
                                     <td style={{ display: 'flex', justifyContent: 'space-around' }}>
                                         <button
                                             className="button is-light"
-                                            onClick={() => downloadMedia(item.title)}
+                                            onClick={(e) => { e.stopPropagation(); downloadMedia(item.title); }}
                                             title="Download"
                                             style={{ backgroundColor: 'blue', color: 'white' }}
                                         >
@@ -220,7 +228,7 @@ const Table = () => {
                                         </button>
                                         <button
                                             className="button is-light"
-                                            onClick={() => deleteMedia(item.title)}
+                                            onClick={(e) => { e.stopPropagation(); deleteMedia(item.title); }}
                                             title="Delete"
                                             style={{ backgroundColor: 'red', color: 'white' }}
                                         >
@@ -237,6 +245,12 @@ const Table = () => {
                 <UploadModal
                     onClose={() => setShowUploadModal(false)}
                     onUpload={getMedia}
+                />
+            )}
+            {showTrackInfoModal && (
+                <TrackInfoModal
+                    track={selectedTrack}
+                    onClose={() => setShowTrackInfoModal(false)}
                 />
             )}
         </div>

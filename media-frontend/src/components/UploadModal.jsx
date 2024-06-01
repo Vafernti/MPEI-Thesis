@@ -59,11 +59,13 @@ const UploadModal = ({ onClose, onUpload }) => {
                         <div className="control">
                             <input
                                 type="file"
+                                accept=".m4a,.mp3,.wav,.flac,.aac"
                                 onChange={handleFileChange}
                                 className="input"
                             />
                         </div>
                     </div>
+                    <p>Supported file types: .m4a, .mp3, .wav, .flac, .aac</p>
                     <button
                         className="button is-primary"
                         onClick={handleUpload}
