@@ -36,6 +36,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Base directory for users uploads
+UPLOAD_DIR = "users_media"
+
+# Ensure the base upload directory exists
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/users_media", StaticFiles(directory="users_media"), name="users_media")
 
@@ -43,11 +50,6 @@ app.mount("/users_media", StaticFiles(directory="users_media"), name="users_medi
 def on_startup():
    _database.init_db()
 
-# Base directory for users uploads
-UPLOAD_DIR = "users_media"
-
-# Ensure the base upload directory exists
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 #Helper function to het the user's upload directory
 def get_user_upload_dir(user_id: int) -> str:
