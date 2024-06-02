@@ -12,7 +12,7 @@ module.exports = function(app) {
       })
     );
     app.use(
-      '/static/default_cover.png', // Adjust this path to match your API endpoint
+      '/static_files', // Adjust this path to match your API endpoint
       createProxyMiddleware({
         target: proxyUrl,
         changeOrigin: true,

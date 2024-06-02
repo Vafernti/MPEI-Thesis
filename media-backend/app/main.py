@@ -43,7 +43,7 @@ UPLOAD_DIR = "users_media"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static_files", StaticFiles(directory="static_files"), name="static_files")
 app.mount("/users_media", StaticFiles(directory="users_media"), name="users_media")
 
 @app.on_event("startup")
@@ -154,7 +154,7 @@ async def upload_file(
 
     # Set default cover image if no cover is found
     if not cover_image:
-        cover_image = "static/default_cover.png"  # Path to the default cover image
+        cover_image = "static_files/default_cover.png"  # Path to the default cover image
         print("No cover image found, using default cover image")
 
     # Get or create artist and album
@@ -344,7 +344,7 @@ async def list_media(
                 "users_id": media.users_id,
                 "length": format_length(media.length),
                 "genre": media.genre,
-                "cover_image": media.cover_image or "static/default_cover.png",  # Ensure the cover_image is included
+                "cover_image": media.cover_image or "static_files/default_cover.png",  # Ensure the cover_image is included
                 "path": f"/users_media/id_{media.users_id}_media/{media.title}"  # Ensure the path is correct
             })
         else:
@@ -435,7 +435,7 @@ async def search_media(
                 "users_id": media.users_id,
                 "length": format_length(media.length),
                 "genre": media.genre,
-                "cover_image": media.cover_image or "static/default_cover.png",  # Ensure the cover_image is included
+                "cover_image": media.cover_image or "static_files/default_cover.png",  # Ensure the cover_image is included
                 "path": f"/users_media/id_{media.users_id}_media/{media.title}"  # Ensure the path is correct
             })
         else:
