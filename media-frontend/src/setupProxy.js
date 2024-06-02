@@ -11,5 +11,19 @@ module.exports = function(app) {
         changeOrigin: true,
       })
     );
+    app.use(
+      '/static/default_cover.png', // Adjust this path to match your API endpoint
+      createProxyMiddleware({
+        target: proxyUrl,
+        changeOrigin: true,
+      })
+    );
+    app.use(
+      '/users_media', // Adjust this path to match your API endpoint
+      createProxyMiddleware({
+        target: proxyUrl,
+        changeOrigin: true,
+      })
+    );
   }
 };
