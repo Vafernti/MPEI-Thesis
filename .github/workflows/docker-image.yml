@@ -22,9 +22,7 @@ jobs:
         id: file_check
         run: |
           echo "Checking for modified files in media-backend"
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^media-backend/'; then
-            echo "backend_changed=true" >> $GITHUB_ENV
-          elif git diff --name-only HEAD | grep -q '^media-backend/'; then
+          if git diff --name-only HEAD^ HEAD | grep -q '^media-backend/'; then
             echo "backend_changed=true" >> $GITHUB_ENV
           else
             echo "backend_changed=false" >> $GITHUB_ENV
@@ -54,9 +52,7 @@ jobs:
         id: file_check
         run: |
           echo "Checking for modified files in media-frontend"
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^media-frontend/'; then
-            echo "frontend_changed=true" >> $GITHUB_ENV
-          elif git diff --name-only HEAD | grep -q '^media-frontend/'; then
+          if git diff --name-only HEAD^ HEAD | grep -q '^media-frontend/'; then
             echo "frontend_changed=true" >> $GITHUB_ENV
           else
             echo "frontend_changed=false" >> $GITHUB_ENV
