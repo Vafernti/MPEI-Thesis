@@ -15,7 +15,7 @@ env:
 jobs:
   build-and-push-backend:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified), 'media-backend/') }}
     permissions:
       contents: read
       packages: write
@@ -24,17 +24,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Debug repository structure
-        run: |
-          echo "Listing repository contents"
-          ls -R
-          echo "Current directory: $(pwd)"
-          echo "Contents of media-backend:"
-          ls -R media-backend/
-      - name: Debug GitHub context
-        run: |
-          echo "Modified files:"
-          echo ${{ toJSON(github.event.head_commit.modified) }}
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -51,7 +40,7 @@ jobs:
 
   build-and-push-frontend:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified), 'media-frontend/') }}
     permissions:
       contents: read
       packages: write
@@ -60,17 +49,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Debug repository structure
-        run: |
-          echo "Listing repository contents"
-          ls -R
-          echo "Current directory: $(pwd)"
-          echo "Contents of media-frontend:"
-          ls -R media-frontend/
-      - name: Debug GitHub context
-        run: |
-          echo "Modified files:"
-          echo ${{ toJSON(github.event.head_commit.modified) }}
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
