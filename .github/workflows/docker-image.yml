@@ -14,7 +14,7 @@ env:
 
 jobs:
   build-and-push-backend:
-    if: contains(github.event.commits.*.modified, 'media_backend/')
+    if: contains(join(github.event.commits.*.message, ' '), 'media_backend/')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,7 +39,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/media_backend
 
   build-and-push-frontend:
-    if: contains(github.event.commits.*.modified, 'media_frontend/')
+    if: contains(join(github.event.commits.*.message, ' '), 'media_frontend/')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,3 +62,13 @@ jobs:
           context: media_frontend/
           push: true
           tags: ${{ env.REGISTRY }}/media_frontend
+
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Debug info
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Commits: ${{ toJson(github.event.commits) }}"
