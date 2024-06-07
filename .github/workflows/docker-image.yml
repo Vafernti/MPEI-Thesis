@@ -4,13 +4,17 @@ on:
   push:
     branches:
       - 'main'
+    paths:
+      - 'media_backend/**'
+      - 'media_frontend/**'
 
 env:
   REGISTRY: diploma.cr.cloud.ru
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-and-push-backend:
+    if: "contains(join(github.event.head_commit.message, ' '), 'media_backend/')"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,28 +24,49 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Debug repository structure
+        run: |
+          echo "Listing repository contents"
+          ls -R
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.AR_KEY }}
           password: ${{ secrets.AR_SECRET }}
-      - name: Debug info
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Commits: ${{ toJson(github.event.commits) }}"
-          echo "Modified files: ${{ github.event.head_commit.modified }}"
-      - name: Build and push Docker image for backend
-        if: "contains(join(github.event.head_commit.message, ' '), 'media_backend/')"
+      - name: Build and push Docker image
+        id: push
         uses: docker/build-push-action@v5
         with:
-          context: media_backend/
+          context: ./media_backend/
           push: true
           tags: ${{ env.REGISTRY }}/media_backend
-      - name: Build and push Docker image for frontend
-        if: "contains(join(github.event.head_commit.message, ' '), 'media_frontend/')"
+
+  build-and-push-frontend:
+    if: "contains(join(github.event.head_commit.message, ' '), 'media_frontend/')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Debug repository structure
+        run: |
+          echo "Listing repository contents"
+          ls -R
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.AR_KEY }}
+          password: ${{ secrets.AR_SECRET }}
+      - name: Build and push Docker image
+        id: push
         uses: docker/build-push-action@v5
         with:
-          context: media_frontend/
+          context: ./media_frontend/
           push: true
           tags: ${{ env.REGISTRY }}/media_frontend
