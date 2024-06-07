@@ -14,7 +14,7 @@ env:
 
 jobs:
   build-and-push-backend:
-    if: "contains(join(github.event.head_commit.message, ' '), 'media-backend/')"
+    if: ${{ contains(github.event.head_commit.message, 'media-backend/') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,7 +46,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/media_backend
 
   build-and-push-frontend:
-    if: "contains(join(github.event.head_commit.message, ' '), 'media-frontend/')"
+    if: ${{ contains(github.event.head_commit.message, 'media-frontend/') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -69,10 +69,4 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.AR_KEY }}
           password: ${{ secrets.AR_SECRET }}
-      - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./media-frontend/
-          push: true
-          tags: ${{ env.REGISTRY }}/media_frontend
+      -
