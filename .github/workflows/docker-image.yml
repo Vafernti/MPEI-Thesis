@@ -47,7 +47,7 @@ jobs:
         with:
           context: ./media-backend/
           push: true
-          tags: ${{ env.REGISTRY }}/media_backend
+          tags: ${{ env.REGISTRY }}/mpei-thesis-backend
 
   build-and-push-frontend:
     runs-on: ubuntu-latest
@@ -83,4 +83,4 @@ jobs:
         with:
           context: ./media-frontend/
           push: true
-          tags: ${{ env.REGISTRY }}/media_frontend
+          tags: ${{ env.REGISTRY }}/mpei-thesis-frontend
