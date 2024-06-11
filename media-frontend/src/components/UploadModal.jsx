@@ -3,25 +3,27 @@ import { UserContext } from "../context/UserContext";
 import ErrorMessage from "./ErrorMessage";
 
 const UploadModal = ({ onClose, onUpload }) => {
-    const [file, setFile] = useState(null);
+    const [files, setFiles] = useState([]);
     const [errorMessage, setErrorMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const [token] = useContext(UserContext);
 
     const handleFileChange = (e) => {
-        setFile(e.target.files[0]);
+        setFiles(e.target.files);
     };
 
     const handleUpload = async () => {
-        if (!file) {
-            setErrorMessage("Please select a file to upload.");
+        if (files.length === 0) {
+            setErrorMessage("Please select at least one file to upload.");
             return;
         }
 
         setLoading(true);
         setErrorMessage("");
         const formData = new FormData();
-        formData.append("file", file);
+        for (let i = 0; i < files.length; i++) {
+            formData.append("files", files[i]);
+        }
 
         const requestOptions = {
             method: "POST",
@@ -36,7 +38,7 @@ const UploadModal = ({ onClose, onUpload }) => {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.detail || "Failed to upload file");
+                throw new Error(data.detail || "Failed to upload files");
             }
 
             onUpload();
@@ -62,6 +64,7 @@ const UploadModal = ({ onClose, onUpload }) => {
                                 accept=".m4a,.mp3,.wav,.flac,.aac"
                                 onChange={handleFileChange}
                                 className="input"
+                                multiple
                             />
                         </div>
                     </div>
