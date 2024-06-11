@@ -71,111 +71,106 @@ async def root():
     return {"message": "MyMedia"}
 
 @app.post("/api/upload/")
-async def upload_file(
-    file: _fastapi.UploadFile = _fastapi.File(...),
+async def upload_files(
+    files: List[_fastapi.UploadFile] = _fastapi.File(...),
     user: _schemas.User = _fastapi.Depends(_services.get_current_user),
     db: _orm.Session = _fastapi.Depends(_services.get_db)
 ):
     user_dir = get_user_upload_dir(user.id)
-    file_path = os.path.join(user_dir, file.filename)
+    uploaded_files = []
 
-    # Check if the file already exists to prevent overwriting
-    if os.path.exists(file_path):
-        raise _fastapi.HTTPException(status_code=400, detail="File already exists")
+    for file in files:
+        file_path = os.path.join(user_dir, file.filename)
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+        if os.path.exists(file_path):
+            continue
 
-    print(f"File saved to {file_path}")
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
 
-    # Extract metadata using mutagen for supported audio files
-    supported_extensions = [".m4a", ".mp3", ".wav", ".flac", ".aac"]
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    
-    if file_extension not in supported_extensions:
-        raise _fastapi.HTTPException(status_code=400, detail="Unsupported file type")
+        print(f"File saved to {file_path}")
 
-    try:
-        audio = None
-        cover_image = None
-        if file_extension == ".m4a":
-            audio = MP4(file_path)
-            if 'covr' in audio:
-                cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
-                with open(cover_image, "wb") as img_file:
-                    img_file.write(audio['covr'][0])
-                print(f"Extracted cover image for .m4a: {cover_image}")
-        elif file_extension == ".mp3":
-            audio = MP3(file_path)
-            for tag in audio.tags.keys():
-                if tag.startswith('APIC:'):
+        supported_extensions = [".m4a", ".mp3", ".wav", ".flac", ".aac"]
+        file_extension = os.path.splitext(file.filename)[1].lower()
+
+        if file_extension not in supported_extensions:
+            continue
+
+        try:
+            audio = None
+            cover_image = None
+            if file_extension == ".m4a":
+                audio = MP4(file_path)
+                if 'covr' in audio:
                     cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
                     with open(cover_image, "wb") as img_file:
-                        img_file.write(audio.tags[tag].data)
-                    print(f"Extracted cover image for .mp3: {cover_image}")
-                    break
-            artist_name = audio.get('TPE1', ["Unknown Artist"])[0]  # Artist
-            album_name = audio.get('TALB', ["Unknown Album"])[0]   # Album
-            genre = audio.get('TCON', ["Unknown Genre"])[0]        # Genre
-        elif file_extension == ".wav":
-            audio = WavPack(file_path)
-            # WAV files typically don't contain embedded cover art
-        elif file_extension == ".flac":
-            audio = FLAC(file_path)
-            if audio.pictures:
-                cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
-                with open(cover_image, "wb") as img_file:
-                    img_file.write(audio.pictures[0].data)
-                print(f"Extracted cover image for .flac: {cover_image}")
-        elif file_extension == ".aac":
-            audio = AAC(file_path)
-            # Handle AAC cover art if available
+                        img_file.write(audio['covr'][0])
+                    print(f"Extracted cover image for .m4a: {cover_image}")
+            elif file_extension == ".mp3":
+                audio = MP3(file_path)
+                for tag in audio.tags.keys():
+                    if tag.startswith('APIC:'):
+                        cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
+                        with open(cover_image, "wb") as img_file:
+                            img_file.write(audio.tags[tag].data)
+                        print(f"Extracted cover image")
+                        break
+                artist_name = audio.get('TPE1', ["Unknown Artist"])[0]
+                album_name = audio.get('TALB', ["Unknown Album"])[0]
+                genre = audio.get('TCON', ["Unknown Genre"])[0]
+            elif file_extension == ".wav":
+                audio = WavPack(file_path)
+            elif file_extension == ".flac":
+                audio = FLAC(file_path)
+                if audio.pictures:
+                    cover_image = os.path.join(user_dir, f"{os.path.splitext(file.filename)[0]}_cover.jpg")
+                    with open(cover_image, "wb") as img_file:
+                        img_file.write(audio.pictures[0].data)
+                    print(f"Extracted cover image for .flac: {cover_image}")
+            elif file_extension == ".aac":
+                audio = AAC(file_path)
 
-        filename = file.filename
-        if file_extension != ".mp3":  # already handled above
-            artist_name = audio.tags.get('\xa9ART', ["Unknown Artist"])[0] if '\xa9ART' in audio.tags else "Unknown Artist"
-            album_name = audio.tags.get('\xa9alb', ["Unknown Album"])[0] if '\xa9alb' in audio.tags else "Unknown Album"
-            genre = audio.tags.get('\xa9gen', ["Unknown Genre"])[0] if '\xa9gen' in audio.tags else "Unknown Genre"
-        length = int(audio.info.length) if hasattr(audio.info, 'length') else 0
+            filename = file.filename
+            if file_extension != ".mp3":
+                artist_name = audio.tags.get('\xa9ART', ["Unknown Artist"])[0] if '\xa9ART' in audio.tags else "Unknown Artist"
+                album_name = audio.tags.get('\xa9alb', ["Unknown Album"])[0] if '\xa9alb' in audio.tags else "Unknown Album"
+                genre = audio.tags.get('\xa9gen', ["Unknown Genre"])[0] if '\xa9gen' in audio.tags else "Unknown Genre"
+            length = int(audio.info.length) if hasattr(audio.info, 'length') else 0
 
-        # Print statements to debug metadata extraction
-        print(f"Artist Name: {artist_name}")
-        print(f"Album Name: {album_name}")
-        print(f"Length: {length}")
-        print(f"Genre: {genre}")
-        
-    except Exception as e:
-        print(f"Error extracting metadata: {e}")
-        artist_name = "Unknown Artist"
-        album_name = "Unknown Album"
-        length = 0
-        genre = "Unknown Genre"
-        cover_image = None
+            print(f"Artist Name: {artist_name}")
+            print(f"Album Name: {album_name}")
+            print(f"Length: {length}")
+            print(f"Genre: {genre}")
+            
+        except Exception as e:
+            print(f"Error extracting metadata: {e}")
+            artist_name = "Unknown Artist"
+            album_name = "Unknown Album"
+            length = 0
+            genre = "Unknown Genre"
+            cover_image = None
 
-    # Set default cover image if no cover is found
-    if not cover_image:
-        cover_image = "static_files/default_cover.png"  # Path to the default cover image
-        print("No cover image found, using default cover image")
+        if not cover_image:
+            cover_image = "static_files/default_cover.png"
+            print("No cover image found, using default cover image")
 
-    # Get or create artist and album
-    artist = await _services.get_or_create_artist(artist_name=artist_name, db=db)
-    album = await _services.get_or_create_album(album_name=album_name, db=db)
+        artist = await _services.get_or_create_artist(artist_name=artist_name, db=db)
+        album = await _services.get_or_create_album(album_name=album_name, db=db)
 
-    # Save metadata to the database
-    media_data = _schemas.CreateMedia(
-        title=filename,
-        artist_id=artist.id,
-        time=_dt.datetime.utcnow(),
-        album_id=album.id,
-        users_id=user.id,
-        length=length,
-        genre=genre,
-        cover_image=cover_image
-    )
-    await _services.create_media(media=media_data, db=db)
-    print(f"Saved media data: {media_data}")
+        media_data = _schemas.CreateMedia(
+            title=filename,
+            artist_id=artist.id,
+            time=_dt.datetime.utcnow(),
+            album_id=album.id,
+            users_id=user.id,
+            length=length,
+            genre=genre,
+            cover_image=cover_image
+        )
+        await _services.create_media(media=media_data, db=db)
+        uploaded_files.append(media_data)
 
-    return {"filename": file.filename, "path": file_path}
+    return {"uploaded_files": uploaded_files}
 
 @app.get("/api/download/{filename}", response_class=FileResponse)
 async def download_file(
@@ -498,4 +493,3 @@ async def stream_file(
     except Exception as e:
         raise _fastapi.HTTPException(status_code=500, detail=str(e))
     
-# Testing attemot %6fewf232421...
